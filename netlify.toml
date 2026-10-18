@@ -9,3 +9,7 @@
 [build.environment]
   NODE_VERSION = "20"
   NEXT_TELEMETRY_DISABLED = "1"
+
+# Runs Next.js properly on Netlify (pages, dynamic routes). Without it the site 404s.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
