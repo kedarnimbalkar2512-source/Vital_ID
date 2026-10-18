@@ -1,0 +1,11 @@
+# Netlify hosts the Next.js frontend. The FastAPI backend runs separately (see render.yaml).
+# Set NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY and NEXT_PUBLIC_API_URL
+# in Netlify: Site configuration -> Environment variables.
+[build]
+  base = "frontend"
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NEXT_TELEMETRY_DISABLED = "1"
