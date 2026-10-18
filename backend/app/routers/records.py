@@ -57,65 +57,6 @@ def _clean(table: str, data: dict) -> dict:
     return out
 
 
-@router.post("/{table}")
-def create(table: Table, body: RecordIn, user: CurrentUser = Depends(current_user)):
-    data = _clean(table, body.data)
-    if not data.get(REQUIRED[table]):
-        raise HTTPException(422, f"{REQUIRED[table]} is required")
-    with tx(user.profile_id) as cur:
-        pid = resolve_managed_patient(cur, user, body.patient_id)
-        data["patient_id"] = pid
-        if table in HAS_SOURCE:
-            data.update(source="patient-reported", verified=False, recorded_by=user.profile_id)
-        cols = list(data)
-        cur.execute(
-            sql.SQL("insert into {} ({}) values ({}) returning *").format(
-                sql.Identifier(table), sql.SQL(", ").join(map(sql.Identifier, cols)),
-                sql.SQL(", ").join(sql.Placeholder() * len(cols))),
-            [data[c] for c in cols],
-        )
-        return cur.fetchone()
-
-
-def _load_own(cur, table: str, record_id: UUID, user: CurrentUser) -> dict:
-    cur.execute(sql.SQL("select * from {} where id = %s").format(sql.Identifier(table)), (record_id,))
-    row = cur.fetchone()
-    if not row:
-        raise HTTPException(404, "Record not found")
-    require_manage(cur, user, row["patient_id"])
-    if table in HAS_SOURCE and row["source"] != "patient-reported":
-        raise HTTPException(403, f"This entry is {row['source']}; only a doctor can change it")
-    return row
-
-
-class PatchIn(BaseModel):
-    data: dict
-
-
-@router.patch("/{table}/{record_id}")
-def update(table: Table, record_id: UUID, body: PatchIn, user: CurrentUser = Depends(current_user)):
-    data = _clean(table, body.data)
-    if not data:
-        raise HTTPException(422, "Nothing to update")
-    with tx(user.profile_id) as cur:
-        _load_own(cur, table, record_id, user)
-        cur.execute(
-            sql.SQL("update {} set {} where id = %s returning *").format(
-                sql.Identifier(table),
-                sql.SQL(", ").join(sql.SQL("{} = %s").format(sql.Identifier(c)) for c in data)),
-            [*data.values(), record_id],
-        )
-        return cur.fetchone()
-
-
-@router.delete("/{table}/{record_id}")
-def delete(table: Table, record_id: UUID, user: CurrentUser = Depends(current_user)):
-    with tx(user.profile_id) as cur:
-        _load_own(cur, table, record_id, user)
-        cur.execute(sql.SQL("delete from {} where id = %s").format(sql.Identifier(table)), (record_id,))
-    return {"ok": True}
-
-
 class PatientUpdate(BaseModel):
     patient_id: UUID | None = None
     full_name: str | None = Field(default=None, max_length=120)
@@ -247,3 +188,64 @@ def photo_url(patient_id: UUID | None = None, user: CurrentUser = Depends(curren
         cur.execute("select photo_url from patients where id = %s", (pid,))
         path = cur.fetchone()["photo_url"]
     return {"url": storage.signed_url("photos", path, 300) if path else None}
+
+
+# Generic /{table} routes are registered last so they don't shadow /documents and /photo
+# (FastAPI matches in registration order).
+@router.post("/{table}")
+def create(table: Table, body: RecordIn, user: CurrentUser = Depends(current_user)):
+    data = _clean(table, body.data)
+    if not data.get(REQUIRED[table]):
+        raise HTTPException(422, f"{REQUIRED[table]} is required")
+    with tx(user.profile_id) as cur:
+        pid = resolve_managed_patient(cur, user, body.patient_id)
+        data["patient_id"] = pid
+        if table in HAS_SOURCE:
+            data.update(source="patient-reported", verified=False, recorded_by=user.profile_id)
+        cols = list(data)
+        cur.execute(
+            sql.SQL("insert into {} ({}) values ({}) returning *").format(
+                sql.Identifier(table), sql.SQL(", ").join(map(sql.Identifier, cols)),
+                sql.SQL(", ").join(sql.Placeholder() * len(cols))),
+            [data[c] for c in cols],
+        )
+        return cur.fetchone()
+
+
+def _load_own(cur, table: str, record_id: UUID, user: CurrentUser) -> dict:
+    cur.execute(sql.SQL("select * from {} where id = %s").format(sql.Identifier(table)), (record_id,))
+    row = cur.fetchone()
+    if not row:
+        raise HTTPException(404, "Record not found")
+    require_manage(cur, user, row["patient_id"])
+    if table in HAS_SOURCE and row["source"] != "patient-reported":
+        raise HTTPException(403, f"This entry is {row['source']}; only a doctor can change it")
+    return row
+
+
+class PatchIn(BaseModel):
+    data: dict
+
+
+@router.patch("/{table}/{record_id}")
+def update(table: Table, record_id: UUID, body: PatchIn, user: CurrentUser = Depends(current_user)):
+    data = _clean(table, body.data)
+    if not data:
+        raise HTTPException(422, "Nothing to update")
+    with tx(user.profile_id) as cur:
+        _load_own(cur, table, record_id, user)
+        cur.execute(
+            sql.SQL("update {} set {} where id = %s returning *").format(
+                sql.Identifier(table),
+                sql.SQL(", ").join(sql.SQL("{} = %s").format(sql.Identifier(c)) for c in data)),
+            [*data.values(), record_id],
+        )
+        return cur.fetchone()
+
+
+@router.delete("/{table}/{record_id}")
+def delete(table: Table, record_id: UUID, user: CurrentUser = Depends(current_user)):
+    with tx(user.profile_id) as cur:
+        _load_own(cur, table, record_id, user)
+        cur.execute(sql.SQL("delete from {} where id = %s").format(sql.Identifier(table)), (record_id,))
+    return {"ok": True}
