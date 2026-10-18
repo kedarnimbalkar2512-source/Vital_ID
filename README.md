@@ -9,7 +9,7 @@ All demo data is **synthetic** and flagged `is_demo` (the UI shows a "Synthetic 
 | Layer | What |
 |---|---|
 | `frontend/` | Next.js 14 (App Router) + TypeScript + Tailwind, Recharts, `qrcode.react`, `@yudiel/react-qr-scanner`. Uses Supabase only for login; all data goes through the API. |
-| `backend/` | FastAPI + Pydantic. Verifies the Supabase JWT, enforces consent, writes the audit log, calls Groq (Llama 3.3 70B, JSON mode). |
+| `backend/` | FastAPI + Pydantic. Verifies the Supabase JWT, enforces consent, writes the audit log, calls Groq (GPT-OSS 120B for text, Qwen 3.8 27B for document images, JSON mode). |
 | `supabase/migrations/` | Schema, RLS on every table, private storage buckets, drug-interaction rule base. |
 
 ## 1. Supabase
