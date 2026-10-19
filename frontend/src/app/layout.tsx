@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 
+import { BackendPill } from "@/components/BackendStatus";
 import { AuthProvider } from "@/lib/auth";
+import { BackendStatusProvider } from "@/lib/backend";
 
 import "./globals.css";
 
@@ -16,7 +18,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <BackendStatusProvider>
+          <AuthProvider>{children}</AuthProvider>
+          <BackendPill />
+        </BackendStatusProvider>
       </body>
     </html>
   );

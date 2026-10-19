@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
+import { BackendBanner } from "@/components/BackendStatus";
 import { Logo } from "@/components/Logo";
 import { Button, cn, ErrorText, Field, Input } from "@/components/ui";
 import { homeFor, useAuth } from "@/lib/auth";
+import { useBackendStatus } from "@/lib/backend";
 import { supabase } from "@/lib/supabase";
 
 type Tab = "patient" | "caregiver" | "doctor";
@@ -26,6 +28,7 @@ function RegisterForm() {
   const [busy, setBusy] = useState(false);
   const { me } = useAuth();
   const router = useRouter();
+  const backend = useBackendStatus();
 
   useEffect(() => {
     if (me) router.replace(homeFor(me));
@@ -39,6 +42,7 @@ function RegisterForm() {
     setError(null);
     const meta: Record<string, string> = { role: tab, full_name: form.full_name.trim(), phone: form.phone.trim() };
     if (tab === "doctor") Object.assign(meta, { licence_no: form.licence_no.trim(), council: form.council.trim(), hospital: form.hospital.trim(), specialty: form.specialty.trim() });
+    await backend.waitUntilLive();
     const { data, error } = await supabase().auth.signUp({ email: form.email, password: form.password, options: { data: meta } });
     setBusy(false);
     if (error) return setError(error.message);
@@ -51,6 +55,7 @@ function RegisterForm() {
         <Logo className="text-lg" />
       </Link>
       <h1 className="text-xl font-semibold">Create your account</h1>
+      <BackendBanner />
       <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-100 p-1">
         {TABS.map((t) => (
           <button
@@ -95,7 +100,7 @@ function RegisterForm() {
       <ErrorText>{error}</ErrorText>
       {notice && <p className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-800">{notice}</p>}
       <Button type="submit" className="w-full" loading={busy}>
-        Create {tab} account
+        {busy && backend.state !== "live" ? `Waiting for server… ${backend.elapsed}s` : `Create ${tab} account`}
       </Button>
       <p className="text-center text-sm text-slate-600">
         Already registered?{" "}
